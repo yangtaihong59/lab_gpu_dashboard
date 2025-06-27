@@ -17,7 +17,7 @@ from flask import Flask, render_template, send_from_directory, jsonify, request
 # 配置参数
 DATA_DIR = "gpu_monitor_data"
 LOG_INTERVAL = 30  # 秒
-AGGREGATION_INTERVAL = 120  # 聚合间隔(秒)
+AGGREGATION_INTERVAL = 90  # 聚合间隔(秒)
 MAX_GAP_TO_MERGE = 240  # 合并时间段的最大间隔(秒)
 FLASK_PORT = 5000  # Flask服务器端口
 
@@ -538,7 +538,7 @@ def generate_dashboard():
             <!DOCTYPE html>
             <html>
             <head>
-                <title>GPU Usage Dashboard</title>
+                <title>4090 GPU 使用仪表盘</title>
                 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
                 <style>
                     .dashboard {
@@ -580,13 +580,13 @@ def generate_dashboard():
                 </style>
             </head>
             <body>
-                <h1>GPU Usage Dashboard</h1>
+                <h1>4090 GPU 使用仪表盘</h1>
                 <div class="dashboard">
             """)
             
             # 1. 当前活跃容器
             f.write('<div class="chart-container">\n')
-            f.write('<h2>Current Active Containers</h2>\n')
+            f.write('<h2>当前活跃容器</h2>\n')
             f.write('<div id="active-containers-table"></div>\n')
             f.write("""
             <script>
@@ -678,7 +678,7 @@ def generate_dashboard():
             
             # 2. 服务显存使用热力图
             f.write('<div class="chart-container">\n')
-            f.write('<h2>Memory Usage by Service</h2>\n')
+            f.write('<h2>容器显存使用情况</h2>\n')
             if not container_df.empty and 'service_name' in container_df:
                 service_memory = container_df.groupby('service_name')['max_memory_used'].sum().sort_values(ascending=False).head(10)
                 if not service_memory.empty:
@@ -709,7 +709,7 @@ def generate_dashboard():
             
             # 3. GPU利用率趋势
             f.write('<div class="chart-container">\n')
-            f.write('<h2>GPU Utilization Over Time</h2>\n')
+            f.write('<h2>容器 GPU 利用率</h2>\n')
             if os.path.exists(gpu_path):
                 gpu_df = pd.read_csv(gpu_path)
                 if 'timestamp' in gpu_df:
@@ -746,7 +746,7 @@ def generate_dashboard():
             
             # 4. 容器GPU时长
             f.write('<div class="chart-container">\n')
-            f.write('<h2>GPU Usage Duration</h2>\n')
+            f.write('<h2>容器 GPU 使用时长</h2>\n')
             if not container_df.empty:
                 duration_df = container_df.groupby('container_name')['total_gpu_seconds'].sum().sort_values(ascending=False).head(10)
                 if not duration_df.empty:
@@ -780,7 +780,7 @@ def generate_dashboard():
 
             # 添加甘特图
             f.write('<div class="chart-container" style="grid-column: span 2;">\n')
-            f.write('<h2>Container GPU Usage Timeline</h2>\n')
+            f.write('<h2>容器 GPU 占用甘特图</h2>\n')
             
             if container_timeline:
                 # 构建甘特图数据
@@ -864,6 +864,132 @@ def generate_dashboard():
                 f.write('<p>No timeline data available</p>')
                 
             f.write('</div>\n')
+
+            # # 添加显卡维度的甘特图
+            # f.write('<div class="chart-container" style="grid-column: span 2;">\n')
+            # f.write('<h2>显卡容器占用甘特图</h2>\n')
+
+            # # 按显卡重新组织时间线数据
+            # gpu_timeline = defaultdict(list)
+            # for container_key, periods in container_timeline.items():
+            #     print(container_key)
+            #     container_id, container_name, service_name = container_key
+
+            #     display_name = f"{service_name} ({container_name})" if service_name != container_name else container_name
+                
+            #     # 假设每个容器可能使用多个显卡，这里需要根据实际数据关联显卡
+            #     # 由于原始数据中容器与显卡的关联需要从时间线之外获取，这里做简化处理
+            #     # 实际应用中应通过容器ID查询其使用的显卡列表
+            #     try:
+            #         # 模拟从API获取容器使用的显卡（实际需根据容器ID查询）
+            #         container_gpus = set()
+            #         container_api_url = f"/api/containers?container_id={container_id}"
+            #         # 这里简化为假设每个容器使用固定显卡（实际应通过API获取）
+            #         gpu_index = 0  # 示例显卡索引，实际需动态获取
+            #         container_gpus.add(gpu_index)
+                    
+            #         for period in periods:
+            #             for gpu_idx in container_gpus:
+            #                 gpu_timeline[gpu_idx].append({
+            #                     "container": display_name,
+            #                     "start": period["start"],
+            #                     "end": period["end"],
+            #                     "duration": period["duration"]
+            #                 })
+            #     except Exception as e:
+            #         print(f"处理容器{display_name}的显卡关联时出错: {e}")
+
+            # if gpu_timeline:
+            #     f.write('<div id="gpu-container-timeline-chart"></div>\n')
+            #     f.write('<script>\n')
+            #     f.write('var gpuTimelineData = [\n')
+                
+            #     # 为每个显卡创建数据
+            #     gpu_list = sorted(gpu_timeline.keys())
+            #     for gpu_idx in gpu_list:
+            #         f.write('  {\n')
+            #         f.write(f'    gpu: "GPU {gpu_idx}",\n')
+            #         f.write('    tasks: [\n')
+                    
+            #         # 添加容器占用时间段
+            #         for task in gpu_timeline[gpu_idx]:
+            #             start_iso = task["start"].isoformat()
+            #             end_iso = task["end"].isoformat()
+            #             duration_hours = round(task["duration"] / 3600, 2)
+                        
+            #             f.write('      {\n')
+            #             f.write(f'        container: "{task["container"]}",\n')
+            #             f.write(f'        start: "{start_iso}",\n')
+            #             f.write(f'        end: "{end_iso}",\n')
+            #             f.write(f'        duration: {duration_hours}\n')
+            #             f.write('      },\n')
+                    
+            #         f.write('    ]\n')
+            #         f.write('  },\n')
+                
+            #     f.write('];\n\n')
+                
+            #     # 构建显卡维度的甘特图
+            #     f.write("""
+            #     var tasks = [];
+            #     var yLabels = [];
+                
+            #     // 组织数据
+            #     for (var i = 0; i < gpuTimelineData.length; i++) {
+            #         var gpu = gpuTimelineData[i];
+            #         yLabels.push(gpu.gpu);
+                    
+            #         for (var j = 0; j < gpu.tasks.length; j++) {
+            #             var task = gpu.tasks[j];
+            #             tasks.push({
+            #                 x: [task.start, task.end],
+            #                 y: [gpu.gpu, gpu.gpu],
+            #                 mode: 'lines',
+            #                 line: {width: 20, color: getRandomColor()},
+            #                 name: task.container,
+            #                 showlegend: false,
+            #                 hovertemplate: '<b>显卡:</b> ' + gpu.gpu + 
+            #                     '<br><b>容器:</b> ' + task.container + 
+            #                     '<br><b>时长:</b> ' + task.duration.toFixed(2) + ' 小时' +
+            #                     '<br><b>开始:</b> %{x|%Y-%m-%d %H:%M:%S}' +
+            #                     '<br><b>结束:</b> %{text}<extra></extra>',
+            #                 text: new Date(task.end).toLocaleString()
+            #             });
+            #         }
+            #     }
+                
+            #     // 生成随机颜色函数
+            #     function getRandomColor() {
+            #         var letters = '0123456789ABCDEF';
+            #         var color = '#';
+            #         for (var i = 0; i < 6; i++) {
+            #             color += letters[Math.floor(Math.random() * 16)];
+            #         }
+            #         return color;
+            #     }
+                
+            #     // 创建图表
+            #     var layout = {
+            #         title: '显卡容器占用时间线',
+            #         xaxis: {title: '时间', type: 'date'},
+            #         yaxis: {
+            #             title: '显卡',
+            #             categoryorder: 'array',
+            #             categoryarray: yLabels.reverse(),
+            #             automargin: true
+            #         },
+            #         height: 600,
+            #         hovermode: 'closest',
+            #         margin: {l: 200}
+            #     };
+                
+            #     Plotly.newPlot('gpu-container-timeline-chart', tasks, layout);
+            #     </script>
+            #     """)
+            # else:
+            #     f.write('<p>暂无显卡容器占用时间线数据</p>')
+                
+            # f.write('</div>\n')
 
             # 关闭HTML标签
             f.write("""
